@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 
 server_name="My server name"
+# Define the output directory and target user
+target_user="USER"
+data_dir="/home/${target_user}/utils/fail2ban_data"
+fail2ban_client="/usr/bin/fail2ban_client"  # Full path to fail2ban_client
 
 show_banned_ips() {
     # @description Routine to display banned IP list per jail.
     # @description It shows the jail name and the list of banned IPs for each jail.
-    sudo fail2ban-client status | grep "Jail list" | cut -d: -f2 | tr -d ' \t' | tr ',' '\n' | while read jail; do
+    $fail2ban_client status | grep "Jail list" | cut -d: -f2 | tr -d ' \t' | tr ',' '\n' | while read jail; do
         echo "== Jail: $jail =="
-        sudo fail2ban-client status "$jail" | grep "Banned IP list"
+        $fail2ban_client status "$jail" | grep "Banned IP list"
         echo ""
     done
 }
@@ -24,7 +28,7 @@ count_banned_ips() {
 
     while read jail; do
         # Get the banned IPs for each jail and count the number of IPs
-        count=$(sudo fail2ban-client status "$jail" | grep -oP "(?<=Banned IP list:\s).*" | wc -w)
+                count=$($fail2ban_client status "$jail" | grep -oP "(?<=Banned IP list:\s).*" | wc -w)
 
         # Store the count in the array
         jail_counts["$jail"]=$count
@@ -35,7 +39,7 @@ count_banned_ips() {
         fi
 
         total=$((total + count))
-    done < <(sudo fail2ban-client status | grep "Jail list" | cut -d: -f2 | tr -d ' \t' | tr ',' '\n')
+        done < <($fail2ban_client status | grep "Jail list" | cut -d: -f2 | tr -d ' \t' | tr ',' '\n')
 
     echo "Total banned IPs: $total"
 
@@ -62,6 +66,9 @@ count_banned_ips() {
         # Write JSON to file
         echo "$json_data" > "$export_file"
         echo "Data exported to $export_file"
+
+        chown "${target_user}:${target_user}" "$export_file"
+        chmod 644 "$export_file"
     fi
 }
 
@@ -78,8 +85,10 @@ elif [[ "$1" == "count" ]]; then
 elif [[ "$1" == "total" ]]; then
     show_total
 elif [[ "$1" == "export" ]]; then
-    output_dir="fail2ban_data"
+    output_dir="${data_dir}"
     mkdir -p "$output_dir" # Create directory if it doesn't exist
+    chown "${target_user}:${target_user}" "$output_dir"
+    chmod 755 "$output_dir"  # Ensures the directory is readable/executable by others
     timestamp=$(date +"%Y%m%d_%H%M%S")
     export_file="$output_dir/fail2ban_stats_$timestamp.json"
     count_banned_ips "false" "$export_file"

@@ -3,8 +3,8 @@
 server_name="My server name"
 # Define the output directory and target user
 target_user="USER"
-data_dir="/home/${target_user}/utils/fail2ban_data"
-fail2ban_client="/usr/bin/fail2ban_client"  # Full path to fail2ban_client
+base_dir="/home/${target_user}/utils/fail2ban_data"
+fail2ban_client="/usr/bin/fail2ban-client" # Full path to fail2ban_client
 
 show_banned_ips() {
     # @description Routine to display banned IP list per jail.
@@ -45,6 +45,18 @@ count_banned_ips() {
 
     # Export to JSON if export_file is provided
     if [[ -n "$export_file" ]]; then
+        # Ensure the base directory exists and is writable by the target user
+        mkdir -p "$base_dir"
+        chown "${target_user}:${target_user}" "$base_dir"
+        chmod 755 "$base_dir"
+
+        # Create monthly directory and ensure it is readable/executable by others
+        current_month=$(date +"%Y-%m")
+        data_dir="${base_dir}/${current_month}"
+        mkdir -p "$data_dir"
+        chown "${target_user}:${target_user}" "$data_dir"
+        chmod 755 "$data_dir"
+
         timestamp=$(date +"%Y-%m-%d %H:%M:%S")
         unique_id=$(date +"%Y%m%d_%H%M%S") # Unique ID based on timestamp
 
@@ -63,12 +75,13 @@ count_banned_ips() {
         json_data="${json_data%,}" # Remove trailing comma
         json_data+="}}"
 
-        # Write JSON to file
-        echo "$json_data" > "$export_file"
-        echo "Data exported to $export_file"
+        # Write JSON to file with permissions
+        export_path="${data_dir}/${export_file}"
+        echo "$json_data" > "${export_path}"
+        echo "Data exported to ${export_path}"
 
-        chown "${target_user}:${target_user}" "$export_file"
-        chmod 644 "$export_file"
+        chown "${target_user}:${target_user}" "export_path"
+        chmod 644 "export_path"
     fi
 }
 
@@ -85,12 +98,8 @@ elif [[ "$1" == "count" ]]; then
 elif [[ "$1" == "total" ]]; then
     show_total
 elif [[ "$1" == "export" ]]; then
-    output_dir="${data_dir}"
-    mkdir -p "$output_dir" # Create directory if it doesn't exist
-    chown "${target_user}:${target_user}" "$output_dir"
-    chmod 755 "$output_dir"  # Ensures the directory is readable/executable by others
     timestamp=$(date +"%Y%m%d_%H%M%S")
-    export_file="$output_dir/fail2ban_stats_$timestamp.json"
+    export_file="fail2ban_stats_${timestamp}.json"
     count_banned_ips "false" "$export_file"
 else
     echo "Usage: $0 {show|count|total|export}"
